@@ -1,6 +1,6 @@
+dash==2.11.1
 pandas
 numpy
 plotly
-dash
 statsmodels
 flask
