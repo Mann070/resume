@@ -2,23 +2,17 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from statsmodels.tsa.arima.model import ARIMA
-import flask
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import io
 from flask import send_file
 
-# Flask server
-server = flask.Flask(__name__)
+# Load dataset
+file_path = "House Price Prediction Dataset.csv"
+df = pd.read_csv(file_path)
 
-# Dash app
-app = dash.Dash(__name__, server=server)
-
-# Load dataset (make sure the CSV is in the same folder)
-df = pd.read_csv("House Price Prediction Dataset.csv")
-
-# Process dataset
+# Convert YearBuilt to datetime (pseudo-time series)
 df['YearBuilt'] = pd.to_datetime(df['YearBuilt'], format='%Y')
 df = df.groupby(df['YearBuilt'].dt.year)['Price'].mean().reset_index()
 df['YearBuilt'] = pd.to_datetime(df['YearBuilt'], format='%Y')
@@ -30,30 +24,38 @@ def forecast_prices(data, periods=2):
         forecast = model_fit.forecast(steps=periods)
         future_dates = pd.date_range(start=data['YearBuilt'].iloc[-1], periods=periods+1, freq='Y')[1:]
         return pd.DataFrame({'YearBuilt': future_dates, 'Price': forecast})
-    except Exception:
+    except Exception as e:
         return pd.DataFrame({'YearBuilt': [], 'Price': []})
 
 theme_options = {'light': 'plotly_white', 'dark': 'plotly_dark'}
 
+# Create Dash app and access underlying Flask server
+app = dash.Dash(__name__)
+server = app.server  # expose Flask server for download route
+
 app.layout = html.Div([
     html.H1("House Price Prediction Dashboard - Done by Mann"),
+    
     dcc.RadioItems(
         id='theme-toggle',
         options=[{'label': 'Light Mode', 'value': 'light'}, {'label': 'Dark Mode', 'value': 'dark'}],
         value='light',
         inline=True
     ),
+    
     dcc.DatePickerRange(
         id='date-picker',
         start_date=df['YearBuilt'].min(),
         end_date=df['YearBuilt'].max()
     ),
+    
     dcc.Dropdown(
         id='period-dropdown',
         options=[{'label': f'{i} Years', 'value': i} for i in range(1, 7)],
         value=2,
         clearable=False
     ),
+    
     dcc.RangeSlider(
         id='price-range',
         min=df['Price'].min(),
@@ -62,8 +64,10 @@ app.layout = html.Div([
         marks={int(price): str(int(price)) for price in np.linspace(df['Price'].min(), df['Price'].max(), num=5)},
         value=[df['Price'].min(), df['Price'].max()]
     ),
+    
     html.Button("Update Forecast", id='update-button', n_clicks=0),
     html.A("Download Report", id='download-link', href="/download_report", download="House_Price_Report.csv"),
+    
     dcc.Graph(id='price-chart'),
     dcc.Graph(id='bar-chart'),
     dcc.Graph(id='trend-chart')
@@ -84,6 +88,7 @@ def update_graph(n_clicks, start_date, end_date, periods, price_range, theme):
     
     filtered_df = df[(df['YearBuilt'] >= start_date) & (df['YearBuilt'] <= end_date) &
                      (df['Price'] >= price_range[0]) & (df['Price'] <= price_range[1])]
+    
     forecast_df = forecast_prices(filtered_df, periods)
     
     fig = go.Figure()
@@ -103,10 +108,11 @@ def update_graph(n_clicks, start_date, end_date, periods, price_range, theme):
 
 @server.route('/download_report')
 def download_report():
+    report_df = df.copy()
     output = io.StringIO()
-    df.to_csv(output, index=False)
+    report_df.to_csv(output, index=False)
     output.seek(0)
     return send_file(io.BytesIO(output.getvalue().encode()), mimetype='text/csv', as_attachment=True, attachment_filename='House_Price_Report.csv')
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, host='0.0.0.0', port=8050)
