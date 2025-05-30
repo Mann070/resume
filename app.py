@@ -113,6 +113,3 @@ def download_report():
     report_df.to_csv(output, index=False)
     output.seek(0)
     return send_file(io.BytesIO(output.getvalue().encode()), mimetype='text/csv', as_attachment=True, attachment_filename='House_Price_Report.csv')
-server = app.server
-if __name__ == "__main__":
-    app.run(debug=False)
