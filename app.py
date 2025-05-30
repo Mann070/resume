@@ -7,22 +7,20 @@ import io
 from flask import send_file
 
 # Load dataset
-file_path = "House Price Prediction Dataset.csv"
-df = pd.read_csv(file_path)
+df = pd.read_csv("House Price Prediction Dataset.csv")
 
-# Convert YearBuilt to datetime (pseudo-time series)
 df['YearBuilt'] = pd.to_datetime(df['YearBuilt'], format='%Y')
 df = df.groupby(df['YearBuilt'].dt.year)['Price'].mean().reset_index()
 df['YearBuilt'] = pd.to_datetime(df['YearBuilt'], format='%Y')
 
 def forecast_prices(data, periods=2):
     try:
-        model = ARIMA(data['Price'], order=(5, 1, 1))
+        model = ARIMA(data['Price'], order=(5,1,1))
         model_fit = model.fit()
         forecast = model_fit.forecast(steps=periods)
         future_dates = pd.date_range(start=data['YearBuilt'].iloc[-1], periods=periods+1, freq='Y')[1:]
         return pd.DataFrame({'YearBuilt': future_dates, 'Price': forecast})
-    except Exception as e:
+    except:
         return pd.DataFrame({'YearBuilt': [], 'Price': []})
 
 theme_options = {'light': 'plotly_white', 'dark': 'plotly_dark'}
@@ -45,7 +43,7 @@ app.layout = html.Div([
     ),
     dcc.Dropdown(
         id='period-dropdown',
-        options=[{'label': f'{i} Years', 'value': i} for i in range(1, 7)],
+        options=[{'label': f'{i} Years', 'value': i} for i in range(1,7)],
         value=2,
         clearable=False
     ),
@@ -54,7 +52,7 @@ app.layout = html.Div([
         min=df['Price'].min(),
         max=df['Price'].max(),
         step=10000,
-        marks={int(price): str(int(price)) for price in np.linspace(df['Price'].min(), df['Price'].max(), num=5)},
+        marks={int(price): str(int(price)) for price in np.linspace(df['Price'].min(), df['Price'].max(), 5)},
         value=[df['Price'].min(), df['Price'].max()]
     ),
     html.Button("Update Forecast", id='update-button', n_clicks=0),
@@ -76,14 +74,8 @@ app.layout = html.Div([
 def update_graph(n_clicks, start_date, end_date, periods, price_range, theme):
     start_date = pd.to_datetime(start_date)
     end_date = pd.to_datetime(end_date)
-
-    filtered_df = df[
-        (df['YearBuilt'] >= start_date) &
-        (df['YearBuilt'] <= end_date) &
-        (df['Price'] >= price_range[0]) &
-        (df['Price'] <= price_range[1])
-    ]
-
+    filtered_df = df[(df['YearBuilt'] >= start_date) & (df['YearBuilt'] <= end_date) &
+                     (df['Price'] >= price_range[0]) & (df['Price'] <= price_range[1])]
     forecast_df = forecast_prices(filtered_df, periods)
 
     fig = go.Figure()
