@@ -1,7 +1,6 @@
-gunicorn
 pandas
 numpy
 plotly
-statsmodels
 dash
-Flask
+statsmodels
+flask
