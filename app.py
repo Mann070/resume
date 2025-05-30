@@ -101,4 +101,4 @@ def download_report():
     return send_file(io.BytesIO(output.getvalue().encode()), mimetype='text/csv', as_attachment=True, attachment_filename='House_Price_Report.csv')
 
 if __name__ == '__main__':
-    app.run_server(host='0.0.0.0', port=8050)
+    app.run(host='0.0.0.0', port=8050)
