@@ -5,9 +5,9 @@ from statsmodels.tsa.arima.model import ARIMA
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
+import io
 from flask import send_file
 import flask
-import io
 
 # Load dataset
 file_path = "House Price Prediction Dataset.csv"
@@ -25,13 +25,16 @@ def forecast_prices(data, periods=2):
         forecast = model_fit.forecast(steps=periods)
         future_dates = pd.date_range(start=data['YearBuilt'].iloc[-1], periods=periods+1, freq='Y')[1:]
         return pd.DataFrame({'YearBuilt': future_dates, 'Price': forecast})
-    except Exception:
+    except Exception as e:
         return pd.DataFrame({'YearBuilt': [], 'Price': []})
 
-theme_options = {'light': 'plotly_white', 'dark': 'plotly_dark'}
-
+# Flask server (WSGI callable)
 server = flask.Flask(__name__)
+
+# Dash app
 app = dash.Dash(__name__, server=server)
+
+theme_options = {'light': 'plotly_white', 'dark': 'plotly_dark'}
 
 app.layout = html.Div([
     html.H1("House Price Prediction Dashboard - Done by Mann"),
@@ -68,9 +71,7 @@ app.layout = html.Div([
 ])
 
 @app.callback(
-    [Output('price-chart', 'figure'),
-     Output('bar-chart', 'figure'),
-     Output('trend-chart', 'figure')],
+    [Output('price-chart', 'figure'), Output('bar-chart', 'figure'), Output('trend-chart', 'figure')],
     [Input('update-button', 'n_clicks'),
      Input('date-picker', 'start_date'),
      Input('date-picker', 'end_date'),
@@ -82,37 +83,22 @@ def update_graph(n_clicks, start_date, end_date, periods, price_range, theme):
     start_date = pd.to_datetime(start_date)
     end_date = pd.to_datetime(end_date)
     
-    filtered_df = df[
-        (df['YearBuilt'] >= start_date) &
-        (df['YearBuilt'] <= end_date) &
-        (df['Price'] >= price_range[0]) &
-        (df['Price'] <= price_range[1])
-    ]
-    
+    filtered_df = df[(df['YearBuilt'] >= start_date) & (df['YearBuilt'] <= end_date) &
+                     (df['Price'] >= price_range[0]) & (df['Price'] <= price_range[1])]
     forecast_df = forecast_prices(filtered_df, periods)
     
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=filtered_df['YearBuilt'], y=filtered_df['Price'],
-                             mode='lines+markers', name='Actual Prices'))
-    fig.add_trace(go.Scatter(x=forecast_df['YearBuilt'], y=forecast_df['Price'],
-                             mode='lines+markers', name='Predicted Prices'))
-    fig.update_layout(title='House Price Trends & Prediction',
-                      xaxis_title='Year', yaxis_title='Price',
-                      template=theme_options[theme])
+    fig.add_trace(go.Scatter(x=filtered_df['YearBuilt'], y=filtered_df['Price'], mode='lines+markers', name='Actual Prices'))
+    fig.add_trace(go.Scatter(x=forecast_df['YearBuilt'], y=forecast_df['Price'], mode='lines+markers', name='Predicted Prices'))
+    fig.update_layout(title='House Price Trends & Prediction', xaxis_title='Year', yaxis_title='Price', template=theme_options[theme])
     
     bar_fig = go.Figure()
     bar_fig.add_trace(go.Bar(x=filtered_df['YearBuilt'], y=filtered_df['Price'], marker=dict(color='blue')))
-    bar_fig.update_layout(title='Average House Price per Year',
-                          xaxis_title='Year', yaxis_title='Price',
-                          template=theme_options[theme])
+    bar_fig.update_layout(title='Average House Price per Year', xaxis_title='Year', yaxis_title='Price', template=theme_options[theme])
     
     trend_fig = go.Figure()
-    trend_fig.add_trace(go.Scatter(x=filtered_df['YearBuilt'],
-                                  y=filtered_df['Price'].rolling(3).mean(),
-                                  mode='lines', name='Rolling Avg'))
-    trend_fig.update_layout(title='Price Trend with Rolling Average',
-                            xaxis_title='Year', yaxis_title='Price',
-                            template=theme_options[theme])
+    trend_fig.add_trace(go.Scatter(x=filtered_df['YearBuilt'], y=filtered_df['Price'].rolling(3).mean(), mode='lines', name='Rolling Avg'))
+    trend_fig.update_layout(title='Price Trend with Rolling Average', xaxis_title='Year', yaxis_title='Price', template=theme_options[theme])
     
     return fig, bar_fig, trend_fig
 
@@ -122,12 +108,7 @@ def download_report():
     output = io.StringIO()
     report_df.to_csv(output, index=False)
     output.seek(0)
-    return send_file(
-        io.BytesIO(output.getvalue().encode()),
-        mimetype='text/csv',
-        as_attachment=True,
-        attachment_filename='House_Price_Report.csv'
-    )
+    return send_file(io.BytesIO(output.getvalue().encode()), mimetype='text/csv', as_attachment=True, attachment_filename='House_Price_Report.csv')
 
 if __name__ == '__main__':
     app.run_server(debug=True)
