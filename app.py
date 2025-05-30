@@ -2,18 +2,23 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from statsmodels.tsa.arima.model import ARIMA
+import flask
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import io
 from flask import send_file
-import flask
 
-# Load dataset
-file_path = "House Price Prediction Dataset.csv"
-df = pd.read_csv(file_path)
+# Flask server
+server = flask.Flask(__name__)
 
-# Convert YearBuilt to datetime (pseudo-time series)
+# Dash app
+app = dash.Dash(__name__, server=server)
+
+# Load dataset (make sure the CSV is in the same folder)
+df = pd.read_csv("House Price Prediction Dataset.csv")
+
+# Process dataset
 df['YearBuilt'] = pd.to_datetime(df['YearBuilt'], format='%Y')
 df = df.groupby(df['YearBuilt'].dt.year)['Price'].mean().reset_index()
 df['YearBuilt'] = pd.to_datetime(df['YearBuilt'], format='%Y')
@@ -25,14 +30,8 @@ def forecast_prices(data, periods=2):
         forecast = model_fit.forecast(steps=periods)
         future_dates = pd.date_range(start=data['YearBuilt'].iloc[-1], periods=periods+1, freq='Y')[1:]
         return pd.DataFrame({'YearBuilt': future_dates, 'Price': forecast})
-    except Exception as e:
+    except Exception:
         return pd.DataFrame({'YearBuilt': [], 'Price': []})
-
-# Flask server (WSGI callable)
-server = flask.Flask(__name__)
-
-# Dash app
-app = dash.Dash(__name__, server=server)
 
 theme_options = {'light': 'plotly_white', 'dark': 'plotly_dark'}
 
@@ -104,9 +103,8 @@ def update_graph(n_clicks, start_date, end_date, periods, price_range, theme):
 
 @server.route('/download_report')
 def download_report():
-    report_df = df.copy()
     output = io.StringIO()
-    report_df.to_csv(output, index=False)
+    df.to_csv(output, index=False)
     output.seek(0)
     return send_file(io.BytesIO(output.getvalue().encode()), mimetype='text/csv', as_attachment=True, attachment_filename='House_Price_Report.csv')
 
